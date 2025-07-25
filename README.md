@@ -85,7 +85,6 @@ pixi run python tools/gradio_app.py
 - **Single Image to 3D**: Complete pipeline from single image to navigable 3D scene
 - **Memory Efficient**: Model offloading support for GPU memory management
 - **Real-time Visualization**: Integrated Rerun viewer for 3D scene inspection
-- **Multiple Backends**: Support for various Flux diffusion model variants
 - **Training-free**: No fine-tuning required for existing diffusion models
 - **High Quality**: Multi-view consistency sampling ensures coherent 3D reconstruction
 
