@@ -1,0 +1,127 @@
+[project]
+authors = [{ name = "pablo vela", email = "pablovela5620@gmail.com" }]
+name = "vistadream"
+requires-python = ">= 3.11"
+version = "0.1.0"
+dependencies = [
+    "gradio",
+    "gradio-rerun>=0.24,<0.25",
+    "rerun-sdk>=0.24,<0.25",
+    "rerun-notebook>=0.24.0,<0.25",
+    "ipython-beartype==0.1",
+    "beartype==0.19.0",
+    "einops>=0.8.1,<0.9",
+]
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.system-requirements]
+cuda = "12" # Replace "12" with the specific CUDA version you intend to use
+
+[tool.pixi.activation]
+# required to make gsplat work on CUDA 12.8 | 5090
+env = { TORCH_CUDA_ARCH_LIST = "12.0" }
+
+[tool.pixi.dependencies]
+python = "3.11.*"
+cmake = ">=4.0.3,<5"
+# CUDA Build Tools
+cuda-compiler = "*"
+cuda-version = "12.8.*"
+cuda-cudart-dev = "*"
+cuda-crt = "*"
+libcusparse-dev = "*"
+cuda-driver-dev = "*"
+cuda-nvcc = "*"
+cuda-nvrtc-dev = "*"
+cuda-nvtx = "*"
+cuda-nvtx-dev = "*"
+cuda-nvml-dev = "*"
+cuda-profiler-api = "*"
+# CUDA Libraries
+cudnn = "*"
+libcublas-dev = "*"
+libcudss-dev = "*"
+libcufile-dev = "*"
+libcufft-dev = "*"
+libcurand-dev = "*"
+libcusolver-dev = "*"
+cusparselt = "*"
+libnvjitlink = "*"
+# end of CUDA dependencies
+scikit-learn = ">=1.7.1,<2"
+jupyterlab = ">=4.4.4,<5"
+open3d = ">=0.19.0,<0.20"
+nodejs = ">=24.4.1,<24.5"
+
+[tool.pixi.pypi-options]
+no-build-isolation = ["gsplat"]
+
+[tool.pixi.pypi-dependencies]
+vistadream = { path = ".", editable = true }
+torch = { version = ">=2.7.0", index = "https://download.pytorch.org/whl/cu128" }
+torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu128" }
+gsplat = { git = "https://github.com/nerfstudio-project/gsplat.git" }
+torchmetrics = ">=1.7.4, <2"
+accelerate = "*"
+tqdm = "*"
+plyfile = "*"
+timm = "*"
+diffusers = "*"
+imageio = "*"
+imageio-ffmpeg = "*"
+transformers = "*"
+torchsde = "*"
+huggingface-hub = "*"
+roma = "*"
+peft = "*"
+omegaconf = "*"
+simplecv = { git = "https://github.com/pablovela5620/simplecv.git" }
+monopriors = { git = "https://github.com/pablovela5620/monoprior.git" }
+moge = { git = "https://github.com/microsoft/MoGe.git", rev = "6b8b43db567ca4b08615c39b42cffd6c76cada29" }
+
+
+[tool.pixi.tasks]
+example = { cmd = "python tools/run_single_img.py --image-path data/office/IMG_4029.jpg", depends-on = [
+    "_download-models",
+] }
+
+[tool.pixi.tasks._download-models]
+cmd = """
+    test -e ckpt/vec.pt
+    || (
+        huggingface-cli download pablovela5620/vistadream  --repo-type model \
+        --local-dir ckpt/
+    )
+    """
+outputs = ["ckpt/vec.pt"]
+description = "Downloads models from huggingface"
+
+[tool.ruff]
+line-length = 150
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+]
+
+ignore = [
+    "E501", # Line too long.
+    "F722", # Forward annotation false positive from jaxtyping. Should be caught by pyright.
+    "F821", # Forward annotation false positive from jaxtyping. Should be caught by pyright.
+]
