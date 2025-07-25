@@ -158,11 +158,3 @@ This project builds upon several outstanding works:
 
 - **[ASUKA](https://github.com/Yikai-Wang/asuka-misato)** - Enhanced image inpainting for mitigating unwanted object insertion
 - **[MoGe](https://wangrc.site/MoGePage/)** - Accurate monocular geometry estimation for open-domain images
-
-## License
-
-This project is licensed under the Apache 2.0 License. See [LICENSE](LICENSE) for details.
-
-## Contributing
-
-We welcome contributions! Please see our [contributing guidelines](CONTRIBUTING.md) for details.
