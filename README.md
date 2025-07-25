@@ -1,4 +1,4 @@
-# UnOfficial Implementation of VistaDream: Single-View 3D Scene Reconstruction with Flux
+# Unofficial Implementation of VistaDream: Single-View 3D Scene Reconstruction with Flux
 
 **VistaDream** is a novel framework for reconstructing 3D scenes from single-view images using Flux-based diffusion models. This implementation combines image outpainting, depth estimation, and 3D Gaussian splatting for high-quality 3D scene generation, with integrated visualization using [Rerun](https://rerun.io/).
 
