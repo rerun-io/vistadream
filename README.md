@@ -134,7 +134,8 @@ ckpt/
 ## Citation
 
 Thanks to the original authors! If you use VistaDream in your research, please cite:
-[Original Repo]([url](https://github.com/WHU-USI3DV/VistaDream))
+
+[Original Repo](https://github.com/WHU-USI3DV/VistaDream)
 ```bibtex
 @inproceedings{wang2025vistadream,
   title={VistaDream: Sampling multiview consistent images for single-view scene reconstruction},
