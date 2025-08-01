@@ -207,3 +207,4 @@ __marimo__/
 
 ckpt/
 data/
+.vscode/launch.json

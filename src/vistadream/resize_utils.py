@@ -2,7 +2,7 @@ from typing import Final
 
 from PIL import Image
 
-MAX_DIMENSION: Final[int] = 1024  # Maximum dimension for resizing to prevent memory issues
+MAX_DIMENSION: Final[int] = 1024 // 2  # Maximum dimension for resizing to prevent memory issues
 
 
 def add_border_and_mask(

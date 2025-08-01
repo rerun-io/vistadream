@@ -1,6 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
+from timeit import default_timer as timer
 
 import numpy as np
 import open3d as o3d
@@ -17,14 +18,12 @@ from monopriors.relative_depth_models import (
 from monopriors.relative_depth_models.base_relative_depth import BaseRelativePredictor
 from PIL import Image
 from simplecv.camera_parameters import Extrinsics, Intrinsics, PinholeParameters
-from simplecv.ops.tsdf_depth_fuser import Open3DFuser
 from simplecv.rerun_log_utils import RerunTyroConfig, log_pinhole
 
 from vistadream.ops.flux import FluxInpainting, FluxInpaintingConfig
-from vistadream.ops.gs.basic import Frame, Gaussian_Scene
+from vistadream.ops.gs.basic import Frame, Gaussian_Scene, save_ply
 from vistadream.ops.gs.train import GS_Train_Tool
 from vistadream.ops.trajs import _generate_trajectory
-from vistadream.ops.utils import save_ply
 from vistadream.ops.visual_check import Check
 from vistadream.resize_utils import add_border_and_mask, process_image
 
@@ -75,7 +74,7 @@ class SingleImageConfig:
     offload: bool = True
     num_steps: int = 25
     guidance: float = 30.0
-    expansion_percent: float = 0.15
+    expansion_percent: float = 0.25
     n_frames: int = 5
 
 
@@ -94,7 +93,6 @@ class SingleImagePipeline:
         self.shared_intrinsics: Intrinsics | None = None
         self.image_plane_distance: float = 0.01
         self.logged_cam_idx_list: list[int] = [0, 1]
-
         ic("Pipeline initialized with configuration:", self.config)
 
     def __call__(self):
@@ -106,13 +104,13 @@ class SingleImagePipeline:
         save_dir: Path = Path("data/test_dir/")
         gf_path: Path = save_dir / "gf.ply"
         save_dir.mkdir(exist_ok=True, parents=True)
-        self._render_splats()
+        # self._render_splats()
         save_ply(self.scene, gf_path)
 
     def _render_splats(self):
         # render 5times frames
         nframes: int = len(self.scene.frames) * 25 if len(self.scene.frames) > 2 else 200
-        cam_T_world_traj: Float[np.ndarray, "n_frames 4 4"] = _generate_trajectory(None, self.scene, nframes=nframes)
+        cam_T_world_traj: Float[np.ndarray, "n_frames 4 4"] = _generate_trajectory(self.scene, nframes=nframes)
         # render
         print(f"[INFO] rendering final video with {nframes} frames...")
         for i, cam_T_world in enumerate(cam_T_world_traj, start=0):
@@ -145,14 +143,15 @@ class SingleImagePipeline:
                 camera=pinhole_param, cam_log_path=cam_log_path, image_plane_distance=self.image_plane_distance * 10
             )
             depth_mm_uint16: UInt16[np.ndarray, "H W"] = np.clip((dpt * 1000).round(), 0, 2**16).astype(np.uint16)
-            rr.log(f"{pinhole_log_path}/depth", rr.DepthImage(depth_mm_uint16, meter=1000.0))
+            # rr.log(f"{pinhole_log_path}/depth", rr.DepthImage(depth_mm_uint16, meter=1000.0))
 
-            edges_mask: Bool[np.ndarray, "h w"] = depth_edges_mask(dpt, threshold=0.01)
+            edges_mask: Bool[np.ndarray, "h w"] = depth_edges_mask(dpt, threshold=0.02)
             masked_depth_hw: Float[np.ndarray, "h w"] = dpt * ~edges_mask
             depth_1hw: Float[np.ndarray, "1 h w"] = rearrange(masked_depth_hw, "h w -> 1 h w").astype(np.float32)
             pts_3d: Float[np.ndarray, "h w 3"] = depth_to_points(
                 depth_1hw, pinhole_param.intrinsics.k_matrix.astype(np.float32)
             )
+            rr.log(f"{pinhole_log_path}/depth", rr.DepthImage(masked_depth_hw, meter=1.0))
 
             # Downscale point cloud using Open3D
             # Flatten points and colors
@@ -182,7 +181,7 @@ class SingleImagePipeline:
 
         print(f"[INFO] DONE rendering {nframes} frames.")
 
-    def _initialize(self):
+    def _initialize(self) -> None:
         rr.set_time("time", sequence=0)
 
         input_image: Image.Image = Image.open(self.config.image_path).convert("RGB")
@@ -327,7 +326,12 @@ class SingleImagePipeline:
 
         self.scene._add_trainable_frame(input_frame, require_grad=True)
         self.scene._add_trainable_frame(outpaint_frame, require_grad=True)
-        self.scene = GS_Train_Tool(self.scene, iters=100)(self.scene.frames)
+        self.scene: Gaussian_Scene = GS_Train_Tool(self.scene, iters=100)(self.scene.frames)
+        # log gaussians
+        # from icecream import ic
+
+        # for gs_frame in self.scene.gaussian_frames:
+        #     ic(gs_frame.rgb)
 
     def setup_rerun(self):
         self.parent_log_path: Path = Path("/world")
@@ -435,5 +439,8 @@ def main(config: SingleImageConfig) -> None:
     """
     Main function to run the Single Image Processing Outpainting/Depth/Splat.
     """
+    start_time = timer()
     vd_pipeline = SingleImagePipeline(config)
     vd_pipeline()
+    end_time = timer()
+    print(f"Processing time: {end_time - start_time:.2f} seconds")

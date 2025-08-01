@@ -73,10 +73,10 @@ class GS_Train_Tool:
         tensor = torch.from_numpy(tensor.astype(np.float32)).to("cuda")
         return tensor
 
-    def __call__(self, target_frames=None):
+    def __call__(self, target_frames=None) -> Gaussian_Scene:
         target_frames = self.GS.frames if target_frames is None else target_frames
         for _ in tqdm.tqdm(range(self.iters)):
-            frame_idx = np.random.randint(0, len(target_frames))
+            frame_idx: int = np.random.randint(0, len(target_frames))
             frame: Frame = target_frames[frame_idx]
             render_rgb, _, _ = self._render(frame)
             loss_rgb = self.rgb_lossfunc(render_rgb, self._to_cuda(frame.rgb), valid_mask=frame.inpaint)
@@ -85,7 +85,7 @@ class GS_Train_Tool:
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
-        refined_scene = self.GS
+        refined_scene: Gaussian_Scene = self.GS
         for gf in refined_scene.gaussian_frames:
             gf._require_grad(False)
         return refined_scene

@@ -372,60 +372,6 @@ def edge_rectify(metric_dpt, rgb, sky=None):
     return metric_dpt, process_rgb
 
 
-from plyfile import PlyData, PlyElement
-
-
-def color2feat(color):
-    max_sh_degree = 3
-    fused_color = (color - 0.5) / 0.28209479177387814
-    features = np.zeros((fused_color.shape[0], 3, (max_sh_degree + 1) ** 2))
-    features = torch.from_numpy(features.astype(np.float32))
-    features[:, :3, 0] = fused_color
-    features[:, 3:, 1:] = 0.0
-    features_dc = features[:, :, 0:1]
-    features_rest = features[:, :, 1:]
-    return features_dc, features_rest
-
-
-def construct_list_of_attributes(features_dc, features_rest, scale, rotation):
-    l = ["x", "y", "z", "nx", "ny", "nz"]
-    # All channels except the 3 DC
-    for i in range(features_dc.shape[1] * features_dc.shape[2]):
-        l.append("f_dc_{}".format(i))
-    for i in range(features_rest.shape[1] * features_rest.shape[2]):
-        l.append("f_rest_{}".format(i))
-    l.append("opacity")
-    for i in range(scale.shape[1]):
-        l.append("scale_{}".format(i))
-    for i in range(rotation.shape[1]):
-        l.append("rot_{}".format(i))
-    return l
-
-
-def save_ply(scene, path):
-    xyz = torch.cat([gf.xyz.reshape(-1, 3) for gf in scene.gaussian_frames], dim=0).detach().cpu().numpy()
-    scale = torch.cat([gf.scale.reshape(-1, 3) for gf in scene.gaussian_frames], dim=0).detach().cpu().numpy()
-    opacities = (
-        torch.cat([gf.opacity.reshape(-1) for gf in scene.gaussian_frames], dim=0)[:, None].detach().cpu().numpy()
-    )
-    rotation = torch.cat([gf.rotation.reshape(-1, 4) for gf in scene.gaussian_frames], dim=0).detach().cpu().numpy()
-    rgb = torch.sigmoid(torch.cat([gf.rgb.reshape(-1, 3) for gf in scene.gaussian_frames], dim=0))
-    # rgb
-    features_dc, features_rest = color2feat(rgb)
-    f_dc = features_dc.flatten(start_dim=1).detach().cpu().numpy()
-    f_rest = features_rest.flatten(start_dim=1).detach().cpu().numpy()
-    normals = np.zeros_like(xyz)
-    # save
-    dtype_full = [
-        (attribute, "f4") for attribute in construct_list_of_attributes(features_dc, features_rest, scale, rotation)
-    ]
-    elements = np.empty(xyz.shape[0], dtype=dtype_full)
-    attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
-    elements[:] = list(map(tuple, attributes))
-    el = PlyElement.describe(elements, "vertex")
-    PlyData([el]).write(path)
-
-
 from sklearn.neighbors import NearestNeighbors
 
 
