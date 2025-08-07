@@ -4,8 +4,10 @@ import random
 import time
 
 import gradio as gr
+import numpy as np
 import torch
 from einops import rearrange, repeat
+from jaxtyping import UInt8, Float
 from PIL import Image
 
 from vistadream.flux.sampling import denoise, get_noise, get_schedule, prepare_fill_empty_prompt, unpack
@@ -120,12 +122,19 @@ def get_flux_fill_res(
     if offload:
         ae = ae.to(torch_device)
 
+    # Load images from paths and convert to numpy arrays
+    img_cond_pil: Image.Image = Image.open(tmp_img).convert("RGB")
+    img_cond: UInt8[np.ndarray, "h w 3"] = np.array(img_cond_pil)
+
+    mask_pil: Image.Image = Image.open(tmp_mask).convert("L")
+    mask: UInt8[np.ndarray, "h w"] = np.array(mask_pil)
+
     inp = prepare_fill_empty_prompt(
         x,
         prompt=prompt,
         ae=ae,
-        img_cond_path=tmp_img,
-        mask_path=tmp_mask,
+        img_cond=img_cond,
+        mask=mask,
     )
 
     timesteps = get_schedule(num_steps, inp["img"].shape[1], shift=True)
@@ -231,10 +240,11 @@ def build_ui(
         torch.cuda.empty_cache()
 
         # Process and display result
-        x = x.clamp(-1, 1)
+        x_clamped: torch.Tensor = x.clamp(-1, 1)
         # x = embed_watermark(x.float())
-        x = rearrange(x[0], "c h w -> h w c")
-        img = Image.fromarray((127.5 * (x + 1.0)).cpu().byte().numpy())
+        x_rearranged: Float[torch.Tensor, "h w c"] = rearrange(x_clamped[0], "c h w -> h w c")
+        img_array: UInt8[np.ndarray, "h w c"] = (127.5 * (x_rearranged + 1.0)).cpu().byte().numpy()
+        img: Image.Image = Image.fromarray(img_array)
 
         return img
 

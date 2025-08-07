@@ -1,6 +1,19 @@
-# VistaDream AI Coding Instructions
+# VistaDream Code Style and Development Guidelines
+
+This document outlines the coding standards, conventions, and development practices for the VistaDream project. These rules are designed to ensure code quality, maintainability, and consistency across the codebase.
+
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [Core Architecture](#core-architecture)
+3. [Type Annotations](#type-annotations)
+4. [Development Workflow](#development-workflow)
+5. [Project-Specific Conventions](#project-specific-conventions)
+6. [File Organization](#file-organization)
+7. [Memory Management](#memory-management)
+8. [Integration Points](#integration-points)
 
 ## Project Overview
+
 VistaDream is a Flux-based diffusion model for image outpainting and 3D scene generation, integrated with Rerun for visualization. The project uses Pixi for package management and CUDA 12.9 for GPU acceleration.
 
 ## Core Architecture
@@ -11,17 +24,6 @@ VistaDream is a Flux-based diffusion model for image outpainting and 3D scene ge
 - **Inference Pipeline**: `sampling.py` handles diffusion sampling, `model.py` defines Flux transformer
 - **Model Variants**: `flux-dev`, `flux-schnell`, `flux-dev-fill`, `flux-dev-depth`, `flux-dev-canny`
 - **Memory Management**: All CLIs support `--offload` to move models between CPU/GPU for memory efficiency
-
-### Key Pattern: Model Offloading
-```python
-# Standard offloading pattern used throughout
-if offload:
-    ae = ae.to(torch_device)  # Move to GPU for encoding
-    # ... use model ...
-    ae = ae.cpu()             # Move back to CPU
-    torch.cuda.empty_cache()  # Clear CUDA memory
-    model = model.to(torch_device)  # Move next model to GPU
-```
 
 ### 3D Scene Generation (`src/vistadream/ops/gs/`)
 - **Frame System**: `Frame` class handles camera parameters, RGB, depth, and inpainting masks
@@ -47,7 +49,7 @@ if offload:
 - **Scene Utilities**: `utils.py` for point cloud operations and depth processing
 - **Visual Check**: `visual_check.py` renders videos from Gaussian scenes
 
-## Type Annotations with JAXTyping & Beartype
+## Type Annotations
 
 ### Runtime Type Checking with Beartype
 The project uses beartype for runtime type validation, automatically activated in `src/vistadream/__init__.py`:
@@ -156,87 +158,69 @@ scene._add_trainable_frame(frame)
 - **3D Content Exclusions**: Use `"-"` prefix to hide depth/mask/rgb from 3D view
 - **View Distribution**: Sample max 5 cameras evenly for grid view
 
-### Integration Points
-- **Rerun**: Blueprint-based 3D visualization with dynamic camera management
-- **Pixi**: All dependency management, no pip/conda commands
-- **Tyro**: Automatic CLI generation from dataclasses
-- **GSplat**: Gaussian splatting backend for 3D scene representation
+## File Organization
 
-## Key Files for Understanding
-- `src/vistadream/flux/util.py` - Model configurations and loading logic
-- `src/vistadream/api/vistadream_pipeline.py` - Main 3D pipeline
-- `src/vistadream/ops/gs/basic.py` - Frame and Gaussian scene classes
-- `src/vistadream/ops/gs/train.py` - Gaussian optimization training
-- `pyproject.toml` - Pixi configuration with CUDA dependencies
-- `tools/run_vistadream.py` - Entry point for full 3D pipeline
+The project follows a specific organizational structure:
 
-## Common Tasks
-1. **Adding new model variant**: Update `configs` dict in `util.py`
-2. **New CLI interface**: Follow pattern in existing `cli_*.py` files
-3. **Memory optimization**: Implement offloading pattern consistently
-4. **Image processing**: Always ensure 32-pixel alignment and MP limits
-5. **3D scene debugging**: Use `visual_check.py` to render videos and point clouds
-
-### Environment Setup
-```bash
-# Primary commands - use pixi for all package management
-pixi install              # Install all dependencies
-pixi run python <script>  # Run scripts in pixi environment
+```
+├── src/vistadream/
+│   ├── api/                 # High-level pipeline APIs
+│   │   ├── flux_outpainting.py    # Outpainting-only pipeline
+│   │   └── vistadream_pipeline.py # Full 3D reconstruction pipeline
+│   ├── flux/                # Flux diffusion model integration
+│   │   ├── cli_*.py         # Command-line interfaces
+│   │   ├── model.py         # Flux transformer architecture
+│   │   ├── sampling.py      # Diffusion sampling logic
+│   │   └── util.py          # Model loading and configuration
+│   └── ops/                 # Core operations
+│       ├── flux.py          # Flux model wrappers
+│       ├── gs/              # Gaussian splatting implementation
+│       ├── trajs/           # Camera trajectory generation
+│       └── visual_check.py  # 3D scene validation tools
+└── tools/                   # Standalone applications
+    ├── gradio_app.py        # Web interface
+    ├── run_flux_outpainting.py
+    ├── run_vistadream.py    # Main 3D pipeline
+    └── run_single_img.py    # Single image processing
 ```
 
-### Model Checkpoints
-Models expect checkpoints in `./ckpt/` directory:
-- `./ckpt/flux_fill/flux1-fill-dev.safetensors`
-- `./ckpt/flux_fill/ae.safetensors` 
-- Environment variables: `FLUX_DEV`, `FLUX_SCHNELL`, `AE` for custom paths
+## Memory Management
 
-### Running Components
-```bash
-# VistaDream pipeline with 3D scene generation
-pixi run python tools/run_vistadream.py --image-path <path> --expansion-percent 0.2 --n-frames 10
+Proper memory management is crucial for the VistaDream project due to its large model sizes:
 
-# Outpainting only with Rerun visualization
-pixi run python tools/run_flux_outpainting.py --image-path <path> --expansion-percent 0.2
-
-# Gradio web interface
-pixi run python tools/gradio_app.py
-```
-
-## Project-Specific Conventions
-
-### Frame Management Pattern
+### Model Offloading Pattern
 ```python
-# Critical: Always set inpaint_wo_edge before adding to scene
-frame.inpaint_wo_edge = mask_wo_edges
-scene._add_trainable_frame(frame)
+# Standard offloading pattern used throughout
+if offload:
+    ae = ae.to(torch_device)  # Move to GPU for encoding
+    # ... use model ...
+    ae = ae.cpu()             # Move back to CPU
+    torch.cuda.empty_cache()  # Clear CUDA memory
+    model = model.to(torch_device)  # Move next model to GPU
 ```
 
-### Type Annotations
-- **Tensor Shapes**: Use jaxtyping for tensor dimension annotation: `BFloat16[torch.Tensor, "batch channels latent_height latent_width"]`
-- **Image Processing**: PIL.Image.Image for all image handling
-- **Configuration**: Dataclasses with tyro for CLI generation
+### Best Practices
+1. Always use `torch.cuda.empty_cache()` after moving models between CPU and GPU
+2. Follow the CPU → GPU → process → CPU cycle for large models
+3. Ensure all image dimensions are multiples of 32 for optimal performance
 
-### File Organization Pattern
-- `cli_*.py` - Command-line interfaces with interactive loops
-- `api/*.py` - High-level APIs with configuration dataclasses  
-- `ops/*.py` - Core operations (flux, gaussian splatting, trajectories)
-- `tools/*.py` - Standalone applications
+## Integration Points
 
-### Memory Management
-- **Critical**: Always use `torch.cuda.empty_cache()` after moving models
-- **Pattern**: CPU → GPU → process → CPU cycle for large models
-- **Dimensions**: Ensure all image dimensions are multiples of 32
+### Rerun
+- Blueprint-based 3D visualization with dynamic camera management
+- Dynamic blueprint updates with `logged_cam_idx_list`
+- Use `"-"` prefix to hide depth/mask/rgb from 3D view
 
-### Rerun Blueprint Pattern
-- **Dynamic Updates**: Call `rr.send_blueprint()` when `logged_cam_idx_list` changes
-- **3D Content Exclusions**: Use `"-"` prefix to hide depth/mask/rgb from 3D view
-- **View Distribution**: Sample max 5 cameras evenly for grid view
+### Pixi
+- All dependency management, no pip/conda commands
+- Environment setup with `pixi install`
 
-### Integration Points
-- **Rerun**: Blueprint-based 3D visualization with dynamic camera management
-- **Pixi**: All dependency management, no pip/conda commands
-- **Tyro**: Automatic CLI generation from dataclasses
-- **GSplat**: Gaussian splatting backend for 3D scene representation
+### Tyro
+- Automatic CLI generation from dataclasses
+- Configuration pattern using `@dataclass` with tyro
+
+### GSplat
+- Gaussian splatting backend for 3D scene representation
 
 ## Key Files for Understanding
 - `src/vistadream/flux/util.py` - Model configurations and loading logic

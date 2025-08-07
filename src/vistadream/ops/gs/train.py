@@ -1,18 +1,24 @@
+from collections.abc import Callable
+
 import numpy as np
+import rerun as rr
 import torch
 import torch.nn.functional as F
 import tqdm
+from jaxtyping import Float
+from numpy import ndarray
+from torch import Tensor
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 
 from vistadream.ops.gs.basic import Frame, Gaussian_Frame, Gaussian_Scene
 
 
 class RGB_Loss:
-    def __init__(self, w_lpips=0.2, w_ssim=0.2):
-        self.rgb_loss = F.smooth_l1_loss
-        self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to("cuda")
-        self.w_ssim = w_ssim
-        self.w_lpips = w_lpips
+    def __init__(self, w_lpips: int | float = 0.2, w_ssim: int | float = 0.2) -> None:
+        self.rgb_loss: Callable[..., Tensor] = F.smooth_l1_loss
+        self.ssim: StructuralSimilarityIndexMeasure = StructuralSimilarityIndexMeasure(data_range=1.0).to("cuda")
+        self.w_ssim: int | float = w_ssim
+        self.w_lpips: int | float = w_lpips
 
     def __call__(self, pr, gt, valid_mask=None):
         pr = torch.nan_to_num(pr)
@@ -37,14 +43,14 @@ class GS_Train_Tool:
     def __init__(self, GS: Gaussian_Scene, iters: int = 100) -> None:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         # hyperparameters for prune, densify, and update
-        self.lr_factor = 1.00
-        self.lr_update = 0.99
+        self.lr_factor: float = 1.00
+        self.lr_update: float = 0.99
         # learning rate
-        self.rgb_lr = 0.0005
-        self.xyz_lr = 0.0001
-        self.scale_lr = 0.005
-        self.opacity_lr = 0.05
-        self.rotation_lr = 0.001
+        self.rgb_lr: float = 0.0005
+        self.xyz_lr: float = 0.0001
+        self.scale_lr: float = 0.005
+        self.opacity_lr: float = 0.05
+        self.rotation_lr: float = 0.001
         # GSs for training
         self.GS: Gaussian_Scene = GS
         # hyperparameters for training
@@ -65,7 +71,7 @@ class GS_Train_Tool:
             ]
         )
 
-    def _render(self, frame):
+    def _render(self, frame: Frame):
         rgb, dpt, alpha = self.GS._render_RGBD(frame)
         return rgb, dpt, alpha
 
@@ -73,9 +79,9 @@ class GS_Train_Tool:
         tensor = torch.from_numpy(tensor.astype(np.float32)).to("cuda")
         return tensor
 
-    def __call__(self, target_frames=None) -> Gaussian_Scene:
-        target_frames = self.GS.frames if target_frames is None else target_frames
-        for _ in tqdm.tqdm(range(self.iters)):
+    def __call__(self, target_frames: list[Frame] | None = None, log: bool = False) -> Gaussian_Scene:
+        target_frames: list[Frame] = self.GS.frames if target_frames is None else target_frames
+        for it in tqdm.tqdm(range(self.iters)):
             frame_idx: int = np.random.randint(0, len(target_frames))
             frame: Frame = target_frames[frame_idx]
             render_rgb, _, _ = self._render(frame)
@@ -85,6 +91,37 @@ class GS_Train_Tool:
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
+
+            if log:
+                rr.set_time("time", sequence=it + 1)
+                # log gaussians
+                xyz: Float[ndarray, "n_splats 3"] = (
+                    torch.cat([gf.xyz.reshape(-1, 3) for gf in self.GS.gaussian_frames], dim=0)
+                    .clone()
+                    .detach()
+                    .cpu()
+                    .numpy()
+                )
+                scale: Float[ndarray, "n_splats 3"] = (
+                    torch.cat([gf.scale.reshape(-1, 3) for gf in self.GS.gaussian_frames], dim=0)
+                    .clone()
+                    .detach()
+                    .cpu()
+                    .numpy()
+                )
+                rgb: Float[torch.Tensor, "n_splats 3"] = torch.sigmoid(
+                    torch.cat([gf.rgb.reshape(-1, 3) for gf in self.GS.gaussian_frames], dim=0)
+                )
+                # log the gaussian scene
+                rr.log(
+                    "world/gaussian_scene",
+                    rr.Points3D(
+                        positions=xyz,
+                        radii=scale,
+                        colors=rgb.clone().detach().cpu().numpy(),
+                    ),
+                )
+
         refined_scene: Gaussian_Scene = self.GS
         for gf in refined_scene.gaussian_frames:
             gf._require_grad(False)

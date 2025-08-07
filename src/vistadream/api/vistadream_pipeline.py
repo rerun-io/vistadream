@@ -20,10 +20,9 @@ from tqdm import tqdm
 
 from vistadream.ops.connect import Smooth_Connect_Tool
 from vistadream.ops.flux import FluxInpainting, FluxInpaintingConfig
-from vistadream.ops.gs.basic import Frame, Gaussian_Scene
+from vistadream.ops.gs.basic import Frame, Gaussian_Scene, save_ply
 from vistadream.ops.gs.train import GS_Train_Tool
 from vistadream.ops.trajs import _generate_trajectory
-from vistadream.ops.utils import save_ply
 from vistadream.ops.visual_check import Check
 from vistadream.resize_utils import add_border_and_mask, process_image
 
@@ -68,7 +67,7 @@ class VistaDreamPipeline:
         # outpaint -> depth prediction -> scene generation
         self._initialize()
         cam_T_world_traj: Float[np.ndarray, "n_frames 4 4"] = _generate_trajectory(
-            None, self.scene, nframes=self.config.n_frames * 6
+            self.scene, nframes=self.config.n_frames * 6
         )
         # log trajectory
         for i, cam_T_world in tqdm(

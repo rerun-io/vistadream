@@ -2,38 +2,14 @@ import os
 from copy import deepcopy
 
 import cv2
-import matplotlib
 import numpy as np
-import open3d as o3d
 import torch
 from omegaconf import OmegaConf
-from PIL import Image
 from scipy.spatial import cKDTree
 
 
 def gen_config(cfg_path):
     return OmegaConf.load(cfg_path)
-
-
-def get_focal_from_fov(new_fov, H, W):
-    # NOTE: top-left pixel should be (0,0)
-    if W >= H:
-        f = (W / 2.0) / np.tan(np.deg2rad(new_fov / 2.0))
-    else:
-        f = (H / 2.0) / np.tan(np.deg2rad(new_fov / 2.0))
-    return f
-
-
-def get_intrins_from_fov(new_fov, H, W):
-    # NOTE: top-left pixel should be (0,0)
-    f = get_focal_from_fov(new_fov, H, W)
-
-    new_cu = (W / 2.0) - 0.5
-    new_cv = (H / 2.0) - 0.5
-
-    new_intrins = np.array([[f, 0, new_cu], [0, f, new_cv], [0, 0, 1]])
-
-    return new_intrins
 
 
 def dpt2xyz(dpt, intrinsic):
@@ -45,93 +21,8 @@ def dpt2xyz(dpt, intrinsic):
     uvz = grid * dpt[:, :, None]
     # inv intrinsic
     inv_intrinsic = np.linalg.inv(intrinsic)
-    xyz = np.einsum(f"ab,hwb->hwa", inv_intrinsic, uvz)
+    xyz = np.einsum("ab,hwb->hwa", inv_intrinsic, uvz)
     return xyz
-
-
-def dpt2xyz_torch(dpt, intrinsic):
-    # get grid
-    height, width = dpt.shape[0:2]
-    grid_u = torch.arange(width)[None, :].repeat(height, 1)
-    grid_v = torch.arange(height)[:, None].repeat(1, width)
-    grid = torch.concatenate([grid_u[:, :, None], grid_v[:, :, None], torch.ones_like(grid_v)[:, :, None]], axis=-1).to(
-        dpt
-    )
-    uvz = grid * dpt[:, :, None]
-    # inv intrinsic
-    inv_intrinsic = torch.linalg.inv(intrinsic)
-    xyz = torch.einsum(f"ab,hwb->hwa", inv_intrinsic, uvz)
-    return xyz
-
-
-def visual_pcd(xyz, color=None, normal=True):
-    if hasattr(xyz, "ndim"):
-        xyz_norm = np.mean(np.sqrt(np.sum(np.square(xyz), axis=1)))
-        xyz = xyz / xyz_norm
-        xyz = xyz.reshape(-1, 3)
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(xyz)
-    else:
-        pcd = xyz
-    if color is not None:
-        color = color.reshape(-1, 3)
-        pcd.colors = o3d.utility.Vector3dVector(color)
-    if normal:
-        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(0.2, 20))
-    o3d.visualization.draw_geometries([pcd])
-
-
-def visual_pcds(xyzs, normal=True):
-    pcds = []
-    for xyz in xyzs:
-        if hasattr(xyz, "ndim"):
-            # xyz_norm = np.mean(np.sqrt(np.sum(np.square(xyz),axis=1)))
-            # xyz = xyz / xyz_norm
-            xyz = xyz.reshape(-1, 3)
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(xyz)
-            pcd.paint_uniform_color(np.random.rand(3))
-        else:
-            pcd = xyz
-        if normal:
-            pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(0.2, 20))
-        pcds.append(pcd)
-    o3d.visualization.draw_geometries(pcds)
-
-
-def save_pic(input_pic: np.ndarray, save_fn, normalize=True):
-    # avoid replace
-    pic = deepcopy(input_pic).astype(np.float32)
-    pic = np.nan_to_num(pic)
-    if normalize:
-        vmin = np.percentile(pic, 2)
-        vmax = np.percentile(pic, 98)
-        pic = (pic - vmin) / (vmax - vmin)
-    pic = (pic * 255.0).clip(0, 255)
-    if save_fn is not None:
-        pic_save = Image.fromarray(pic.astype(np.uint8))
-        pic_save.save(save_fn)
-    return pic
-
-
-def depth_colorize(dpt, sky_mask=None):
-    cm = matplotlib.colormaps["Spectral"]
-    depth = dpt_normalize(dpt, sky_mask)
-    img_colored_np = cm(depth, bytes=False)[:, :, 0:3]  # value from 0 to 1
-    return img_colored_np
-
-
-def dpt_normalize(dpt, sky_mask=None):
-    if sky_mask is not None:
-        pic = dpt[~sky_mask]
-    else:
-        pic = dpt
-    vmin = np.percentile(pic, 2)
-    vmax = np.percentile(pic, 98)
-    dpt = (deepcopy(dpt) - vmin) / (vmax - vmin)
-    if sky_mask is not None:
-        dpt[sky_mask] = 1.0
-    return dpt
 
 
 def transform_points(pts, transform):

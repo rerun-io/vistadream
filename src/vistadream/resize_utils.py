@@ -1,8 +1,4 @@
-from typing import Final
-
 from PIL import Image
-
-MAX_DIMENSION: Final[int] = 1024 // 2  # Maximum dimension for resizing to prevent memory issues
 
 
 def add_border_and_mask(
@@ -123,7 +119,7 @@ def resize(img: Image.Image, min_mp: float = 0.5, max_mp: float = 2.0) -> Image.
     return img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
 
-def process_image(input_image: Image.Image) -> Image.Image:
+def process_image(input_image: Image.Image, max_dimension: int = 1920) -> Image.Image:
     """
     Resizes the input PIL Image to fit within a maximum dimension while ensuring both width and height are multiples of 32.
 
@@ -138,7 +134,7 @@ def process_image(input_image: Image.Image) -> Image.Image:
     width = input_image.size[0]
     height = input_image.size[1]
     # Calculate scale factor to fit within max_dimension
-    scale: float = min(MAX_DIMENSION / width, MAX_DIMENSION / height)
+    scale: float = min(max_dimension / width, max_dimension / height)
     if scale < 1.0:
         new_width = int(32 * round(width * scale / 32))
         new_height = int(32 * round(height * scale / 32))

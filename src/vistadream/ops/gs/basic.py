@@ -47,6 +47,7 @@ class Frame:
     dpt: np.ndarray | None = None
     inpaint: Bool[ndarray, "H W"] | None = None
     inpaint_wo_edge: Bool[ndarray, "H W"] | None = None
+    dpt_conf_mask: Bool[ndarray, "H W"] | None = None
     intrinsic: Float[ndarray, "3 3"] | None = None
     cam_T_world: Float[ndarray, "4 4"] | None = None
     ideal_dpt: Float[ndarray, "H W"] | None = None
@@ -106,14 +107,26 @@ class Gaussian_Frame:
         # for gaussian initialization
         self._set_property_from_frame(frame)
 
-    def _to_3d(self):
+    def _to_3d(self) -> Float[np.ndarray, "H W 3"]:
         # inv intrinsic
         xyz = dpt2xyz(self.dpt, self.intrinsic)
         inv_extrinsic = np.linalg.inv(self.world_T_cam)
         xyz = transform_points(xyz, inv_extrinsic)
         return xyz
 
-    def _paint_filter(self, paint_mask):
+    def _paint_filter(self, paint_mask: Bool[ndarray, "H W"]) -> None:
+        """
+        Applies a boolean mask to filter the object's attributes.
+
+        If the number of True values in `paint_mask` is less than 3, a default mask is applied to ensure at least one element is selected.
+        The method then filters the `rgb`, `xyz`, `scale`, `opacity`, and `rotation` attributes using the provided or default mask.
+
+        Args:
+            paint_mask (Bool[ndarray, "H W"]): A boolean mask indicating which elements to keep.
+
+        Returns:
+            None
+        """
         if np.sum(paint_mask) < 3:
             paint_mask = np.zeros((self.H, self.W))
             paint_mask[0:1] = 1
@@ -124,7 +137,7 @@ class Gaussian_Frame:
         self.opacity = self.opacity[paint_mask]
         self.rotation = self.rotation[paint_mask]
 
-    def _to_cuda(self):
+    def _to_cuda(self) -> None:
         self.rgb = torch.from_numpy(self.rgb.astype(np.float32)).to(self.device)
         self.xyz = torch.from_numpy(self.xyz.astype(np.float32)).to(self.device)
         self.scale = torch.from_numpy(self.scale.astype(np.float32)).to(self.device)
@@ -171,19 +184,19 @@ class Gaussian_Frame:
     def _set_property_from_frame(self, frame: Frame):
         """frame here is a complete init/inpainted frame"""
         # basic frame-level property
-        self.H = frame.H
-        self.W = frame.W
-        self.dpt = frame.dpt
-        self.intrinsic = frame.intrinsic
-        self.world_T_cam = frame.cam_T_world
+        self.H: int = frame.H
+        self.W: int = frame.W
+        self.dpt: Float[np.ndarray, "H W"] = frame.dpt
+        self.intrinsic: Float[np.ndarray, "3 3"] = frame.intrinsic
+        self.world_T_cam: Float[np.ndarray, "4 4"] = frame.cam_T_world
         # gaussian property -- xyz with train-able pixel-aligned scale and shift
-        self.xyz = self._to_3d()
+        self.xyz: Float[np.ndarray, "H W 3"] = self._to_3d()
         # gaussian property -- HW3 rgb
-        self.rgb = frame.rgb
+        self.rgb: Float[np.ndarray, "H W 3"] = frame.rgb
         # gaussian property -- HW4 rotation HW3 scale
         self._coarse_init_scale_rotations()
         # gaussian property -- HW opacity
-        self.opacity = np.ones((self.H, self.W, 1)) * 0.8
+        self.opacity: Float[np.ndarray, "H W 1"] = np.ones((self.H, self.W, 1)) * 0.8
         # to cuda
         self._paint_filter(frame.inpaint_wo_edge)
         self._to_cuda()
@@ -206,6 +219,38 @@ class Gaussian_Frame:
         self.rotation = self.rotation.requires_grad_(sign)
 
 
+@dataclass
+class RenderOutput:
+    """
+    Output from Gaussian splatting rendering containing RGB, depth, and alpha channels.
+    Supports both PyTorch tensors and numpy arrays for flexible usage.
+    """
+
+    rgb: Float[Tensor, "H W 3"] | Float[ndarray, "H W 3"]
+    depth: Float[Tensor, "H W"] | Float[ndarray, "H W"]
+    alpha: Float[Tensor, "1 H W 1"] | Float[ndarray, "1 H W 1"]
+
+    def to_numpy(self) -> "RenderOutput":
+        """Convert all tensors to numpy arrays, returning new RenderOutput."""
+        if isinstance(self.rgb, torch.Tensor):
+            return RenderOutput(
+                rgb=self.rgb.detach().cpu().numpy(),
+                depth=self.depth.detach().cpu().numpy(),
+                alpha=self.alpha.detach().cpu().numpy(),
+            )
+        return self  # Already numpy
+
+    def to_tensor(self, device: str = "cuda") -> "RenderOutput":
+        """Convert all numpy arrays to tensors, returning new RenderOutput."""
+        if isinstance(self.rgb, np.ndarray):
+            return RenderOutput(
+                rgb=torch.from_numpy(self.rgb.astype(np.float32)).to(device),
+                depth=torch.from_numpy(self.depth.astype(np.float32)).to(device),
+                alpha=torch.from_numpy(self.alpha.astype(np.float32)).to(device),
+            )
+        return self  # Already tensor
+
+
 class Gaussian_Scene:
     def __init__(self):
         # frames initialing the frame
@@ -220,35 +265,38 @@ class Gaussian_Scene:
         self.traj_type = "spiral"
         self.traj_min_percentage = 5
         self.traj_max_percentage = 50
-        self.traj_forward_ratio = 0.3
-        self.traj_backward_ratio = 0.4
+        self.traj_forward_ratio: float = 0.3
+        self.traj_backward_ratio: float = 0.4
 
     # basic operations
     def _render_RGBD(
         self, frame: Frame, background_color: Literal["black", "white"] = "black"
-    ) -> tuple[Tensor, Tensor, Tensor]:
+    ) -> tuple[Float[Tensor, "H W 3"], Float[Tensor, "H W"], Float[Tensor, "1 H W 1"]]:
         background = None
         if background_color == "white":
             background = torch.ones(1, 4, device=self.device) * 0.1
             background[:, -1] = 0.0  # for depth
         # aligned untrainable xyz and unaligned trainable xyz
         # others
-        xyz = torch.cat([gf.xyz.reshape(-1, 3) for gf in self.gaussian_frames], dim=0)
-        rgb = torch.cat([gf.rgb.reshape(-1, 3) for gf in self.gaussian_frames], dim=0)
-        scale = torch.cat([gf.scale.reshape(-1, 3) for gf in self.gaussian_frames], dim=0)
-        opacity = torch.cat([gf.opacity.reshape(-1) for gf in self.gaussian_frames], dim=0)
-        rotation = torch.cat([gf.rotation.reshape(-1, 4) for gf in self.gaussian_frames], dim=0)
+        xyz: Float[Tensor, "n_splats 3"] = torch.cat([gf.xyz.reshape(-1, 3) for gf in self.gaussian_frames], dim=0)
+        rgb: Float[Tensor, "n_splats 3"] = torch.cat([gf.rgb.reshape(-1, 3) for gf in self.gaussian_frames], dim=0)
+        scale: Float[Tensor, "n_splats 3"] = torch.cat([gf.scale.reshape(-1, 3) for gf in self.gaussian_frames], dim=0)
+        opacity: Float[Tensor, "n_splats"] = torch.cat([gf.opacity.reshape(-1) for gf in self.gaussian_frames], dim=0)  # noqa: UP037
+        rotation: Float[Tensor, "n_splats 4"] = torch.cat(
+            [gf.rotation.reshape(-1, 4) for gf in self.gaussian_frames], dim=0
+        )
         # activate
         rgb = self.rgbs_act(rgb)
         scale = self.scales_act(scale)
         rotation = F.normalize(rotation, dim=1)
         opacity = self.opacity_act(opacity)
         # property
-        H, W = frame.H, frame.W
-        intrinsic = torch.from_numpy(frame.intrinsic.astype(np.float32)).to(self.device)
-        extrinsic = torch.from_numpy(frame.cam_T_world.astype(np.float32)).to(self.device)
+        H = frame.H
+        W = frame.W
+        intrinsic: Float[Tensor, "3 3"] = torch.from_numpy(frame.intrinsic.astype(np.float32)).to(self.device)
+        extrinsic: Float[Tensor, "4 4"] = torch.from_numpy(frame.cam_T_world.astype(np.float32)).to(self.device)
         # render
-        render_out, render_alpha, _ = gs.rendering.rasterization(
+        raster_output: tuple[Float[Tensor, "1 H W 4"], Float[Tensor, "1 H W 1"], dict] = gs.rendering.rasterization(
             means=xyz,
             scales=scale,
             quats=rotation,
@@ -263,9 +311,12 @@ class Gaussian_Scene:
             render_mode="RGB+ED",
             backgrounds=background,
         )  # render: 1*H*W*(3+1)
-        render_out = render_out.squeeze()  # result: H*W*(3+1)
-        render_rgb = render_out[:, :, 0:3]
-        render_dpt = render_out[:, :, -1]
+        render_out: Float[Tensor, "1 H W 4"] = raster_output[0]
+        render_alpha: Float[Tensor, "1 H W 1"] = raster_output[1]
+        render_out: Float[Tensor, "H W 4"] = render_out.squeeze()
+        # separate rgb, dpt, alpha
+        render_rgb: Float[Tensor, "H W 3"] = render_out[:, :, 0:3]
+        render_dpt: Float[Tensor, "H W"] = render_out[:, :, -1]
         return render_rgb, render_dpt, render_alpha
 
     @torch.no_grad()
@@ -365,12 +416,12 @@ def save_ply(scene: Gaussian_Scene, path: Path) -> None:
     conda_prefix = os.environ.get("CONDA_PREFIX", "")
     splat_transform_path = Path(conda_prefix) / "bin" / "splat-transform"
 
-    if splat_transform_path.exists():
-        # Convert to compressed PLY
-        compressed_path = path.parent / f"{path.stem}.compressed.ply"
-        cmd = [str(splat_transform_path), "-w", str(path), str(compressed_path)]
+    # Convert to compressed PLY
+    compressed_path: Path = path.parent / f"{path.stem}.compressed.ply"
+    cmd = [str(splat_transform_path), "-w", str(path), str(compressed_path)]
+    try:
         process = subprocess.run(cmd, capture_output=True, text=True)
         if process.returncode != 0:
             raise RuntimeError(f"Failed to compress PLY: {process.stderr}")
-    else:
-        print(f"Warning: splat-transform not found at {splat_transform_path}, skipping compression")
+    except Exception as e:
+        print(f"Error during PLY compression: {e}")
