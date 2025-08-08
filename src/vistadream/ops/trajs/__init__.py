@@ -11,7 +11,7 @@ from .spiral import Spiral
 from .wobble import Wobble
 
 
-def _generate_trajectory(cfg: Any | None, scene: Gaussian_Scene, nframes=None) -> Float[np.ndarray, "n_frames 4 4"]:
+def _generate_trajectory(scene: Gaussian_Scene, nframes: int) -> Float[np.ndarray, "n_frames 4 4"]:
     """
     Generate camera trajectory for rendering.
 
@@ -25,15 +25,14 @@ def _generate_trajectory(cfg: Any | None, scene: Gaussian_Scene, nframes=None) -
             in cam_T_world format (world-to-camera transformations).
     """
     method: Literal["rot", "wobble", "spiral", "interp"] = scene.traj_type
-    nframe = cfg.scene.traj.n_sample * 6 if nframes is None else nframes
     if method == "rot":
-        runner = Rot(scene, nframe)
+        runner = Rot(scene, nframes)
     elif method == "wobble":
-        runner = Wobble(scene, nframe)
+        runner = Wobble(scene, nframes)
     elif method == "spiral":
-        runner = Spiral(scene, nframe)
+        runner = Spiral(scene, nframes)
     elif method == "interp":
-        runner = Interp(scene, nframe)
+        runner = Interp(scene, nframes)
     else:
         raise TypeError("method = rot / spiral / wobble / interp")
     return runner()

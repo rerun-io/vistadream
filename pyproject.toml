@@ -8,8 +8,6 @@ dependencies = [
     "gradio-rerun>=0.24,<0.25",
     "rerun-sdk>=0.24,<0.25",
     "rerun-notebook>=0.24.0,<0.25",
-    "ipython-beartype==0.1",
-    "beartype==0.19.0",
     "einops>=0.8.1,<0.9",
 ]
 
@@ -22,18 +20,18 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
 
 [tool.pixi.system-requirements]
-cuda = "12" # Replace "12" with the specific CUDA version you intend to use
+cuda = "12"
 
 [tool.pixi.activation]
 # required to make gsplat work on CUDA 12.8 | 5090
 env = { TORCH_CUDA_ARCH_LIST = "12.0" }
 
 [tool.pixi.dependencies]
-python = "3.11.*"
+python = "3.12.*"
 cmake = ">=4.0.3,<5"
 # CUDA Build Tools
 cuda-compiler = "*"
-cuda-version = "12.8.*"
+cuda-version = "12.9.*"
 cuda-cudart-dev = "*"
 cuda-crt = "*"
 libcusparse-dev = "*"
@@ -59,16 +57,20 @@ scikit-learn = ">=1.7.1,<2"
 jupyterlab = ">=4.4.4,<5"
 open3d = ">=0.19.0,<0.20"
 nodejs = ">=24.4.1,<24.5"
+pytorch-gpu = "*"
+torchvision = "*"
+torchmetrics = "*"
+
 
 [tool.pixi.pypi-options]
-no-build-isolation = ["gsplat"]
+no-build-isolation = ["gsplat", "xformers"]
 
 [tool.pixi.pypi-dependencies]
 vistadream = { path = ".", editable = true }
-torch = { version = ">=2.7.0", index = "https://download.pytorch.org/whl/cu128" }
-torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu128" }
+# torch = { version = ">=2.7.0", index = "https://download.pytorch.org/whl/cu128" }
+# torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu128" }
 gsplat = { git = "https://github.com/nerfstudio-project/gsplat.git" }
-torchmetrics = ">=1.7.4, <2"
+# torchmetrics = ">=1.7.4, <2"
 accelerate = "*"
 tqdm = "*"
 plyfile = "*"
@@ -82,13 +84,25 @@ huggingface-hub = "*"
 roma = "*"
 peft = "*"
 omegaconf = "*"
-simplecv = { git = "https://github.com/pablovela5620/simplecv.git" }
+xformers = { git = "https://github.com/facebookresearch/xformers.git", rev = "main" }
+simplecv = { git = "https://github.com/pablovela5620/simplecv.git", rev = "10780d8a1d6d3e58b5f8966b62f71f224b812a3f" }
 monopriors = { git = "https://github.com/pablovela5620/monoprior.git" }
 moge = { git = "https://github.com/microsoft/MoGe.git", rev = "6b8b43db567ca4b08615c39b42cffd6c76cada29" }
 
+[tool.pixi.feature.dev.dependencies]
+beartype = ">=0.19.0,<0.20"
+ruff = ">=0.12.7,<0.13"
+pytest = ">=8.4.1,<9"
+
+[tool.pixi.feature.dev.pypi-dependencies]
+ipython_beartype = { git = "https://github.com/beartype/ipython-beartype.git", rev = "main" }
+
+[tool.pixi.environments]
+dev = { features = ["dev"] }
 
 [tool.pixi.tasks]
 example = { cmd = "python tools/run_single_img.py --image-path data/office/IMG_4029.jpg", depends-on = [
+    "_install-splat-transform",
     "_download-models",
 ] }
 
@@ -102,6 +116,16 @@ cmd = """
     """
 outputs = ["ckpt/vec.pt"]
 description = "Downloads models from huggingface"
+
+[tool.pixi.tasks._install-splat-transform]
+cmd = """
+    test -e $CONDA_PREFIX/bin/splat-transform
+    || (
+        npm install -g @playcanvas/splat-transform
+    )
+    """
+outputs = ["$CONDA_PREFIX/bin/splat-transform"]
+description = "Installs the splat-transform tool"
 
 [tool.ruff]
 line-length = 150
@@ -121,7 +145,8 @@ select = [
 ]
 
 ignore = [
-    "E501", # Line too long.
-    "F722", # Forward annotation false positive from jaxtyping. Should be caught by pyright.
-    "F821", # Forward annotation false positive from jaxtyping. Should be caught by pyright.
+    "E501",  # Line too long.
+    "F722",  # Forward annotation false positive from jaxtyping. Should be caught by pyright.
+    "F821",  # Forward annotation false positive from jaxtyping. Should be caught by pyright.
+    "UP037", # Quoted annotations, false positive from jaxtyping.
 ]
