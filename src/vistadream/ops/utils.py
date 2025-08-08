@@ -4,6 +4,7 @@ from copy import deepcopy
 import cv2
 import numpy as np
 import torch
+from jaxtyping import Float
 from omegaconf import OmegaConf
 from scipy.spatial import cKDTree
 
@@ -12,7 +13,10 @@ def gen_config(cfg_path):
     return OmegaConf.load(cfg_path)
 
 
-def dpt2xyz(dpt, intrinsic):
+def dpt2xyz(
+    dpt: Float[np.ndarray, "H W"],
+    intrinsic: Float[np.ndarray, "3 3"],
+) -> Float[np.ndarray, "H W 3"]:
     # get grid
     height, width = dpt.shape[0:2]
     grid_u = np.arange(width)[None, :].repeat(height, axis=0)

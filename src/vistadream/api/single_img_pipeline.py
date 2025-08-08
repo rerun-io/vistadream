@@ -87,7 +87,7 @@ class SingleImageConfig:
     guidance: float = 30.0
     expansion_percent: float = 0.3
     n_frames: int = 10
-    max_resolution: int = 1920
+    max_resolution: Literal[512, 1024, 1920] = 1920
     run_coarse: bool = True
 
 
@@ -632,10 +632,22 @@ class SingleImagePipeline:
         init_content_3d = [
             "+ $origin/**",
             f"- {self.final_log_path}/camera/pinhole/depth",
-            *[f"- {self.parent_log_path}/camera_{cam}/pinhole/depth" for cam in initial_cameras],
-            *[f"- {self.parent_log_path}/camera_{cam}/pinhole/dpt_conf_mask" for cam in initial_cameras],
-            *[f"- {self.parent_log_path}/camera_{cam}/pinhole/inpaint_mask" for cam in initial_cameras],
-            *[f"- {self.parent_log_path}/camera_{cam}/pinhole/inpaint_wo_edges_mask" for cam in initial_cameras],
+            *[
+                f"- {self.parent_log_path}/camera_{cam}/pinhole/depth"
+                for cam in initial_cameras + self.logged_cam_idx_list
+            ],
+            *[
+                f"- {self.parent_log_path}/camera_{cam}/pinhole/dpt_conf_mask"
+                for cam in initial_cameras + self.logged_cam_idx_list
+            ],
+            *[
+                f"- {self.parent_log_path}/camera_{cam}/pinhole/inpaint_mask"
+                for cam in initial_cameras + self.logged_cam_idx_list
+            ],
+            *[
+                f"- {self.parent_log_path}/camera_{cam}/pinhole/inpaint_wo_edges_mask"
+                for cam in initial_cameras + self.logged_cam_idx_list
+            ],
         ]
 
         initialization_view = rrb.Horizontal(

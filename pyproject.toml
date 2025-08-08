@@ -92,6 +92,7 @@ moge = { git = "https://github.com/microsoft/MoGe.git", rev = "6b8b43db567ca4b08
 [tool.pixi.feature.dev.dependencies]
 beartype = ">=0.19.0,<0.20"
 ruff = ">=0.12.7,<0.13"
+pytest = ">=8.4.1,<9"
 
 [tool.pixi.feature.dev.pypi-dependencies]
 ipython_beartype = { git = "https://github.com/beartype/ipython-beartype.git", rev = "main" }

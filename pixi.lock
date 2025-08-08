@@ -587,6 +587,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/charset-normalizer-3.4.2-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/click-8.2.1-pyh707e725_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/cmake-4.0.3-h74e3db0_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/comm-0.2.3-pyhe01879c_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/conda-gcc-specs-14.3.0-hb991d5c_4.conda
       - conda: https://prefix.dev/conda-forge/linux-64/contourpy-1.3.3-py312hd9148b4_1.conda
@@ -679,6 +680,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/icu-75.1-he02047a_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/idna-3.10-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/importlib-metadata-8.7.0-pyhe01879c_1.conda
+      - conda: https://prefix.dev/conda-forge/noarch/iniconfig-2.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/ipykernel-6.30.0-pyh82676e8_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ipython-9.4.0-pyhfa0c392_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/ipython_pygments_lexers-1.1.1-pyhd8ed1ab_0.conda
@@ -853,6 +855,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/pixman-0.46.4-h537e5f6_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/platformdirs-4.3.8-pyhe01879c_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/plotly-6.2.0-pyhd8ed1ab_0.conda
+      - conda: https://prefix.dev/conda-forge/noarch/pluggy-1.6.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/proj-9.6.2-h18fbb6c_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/prometheus_client-0.22.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/prompt-toolkit-3.0.51-pyha770c72_0.conda
@@ -868,6 +871,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/pygments-2.19.2-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/pyparsing-3.2.3-pyhe01879c_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
+      - conda: https://prefix.dev/conda-forge/noarch/pytest-8.4.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/python-3.12.11-h9e4cc4f_0_cpython.conda
       - conda: https://prefix.dev/conda-forge/noarch/python-dateutil-2.9.0.post0-pyhe01879c_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/python-fastjsonschema-2.21.1-pyhd8ed1ab_0.conda
@@ -976,7 +980,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/dc/95/1ec57df6c52152fb4c776da5fbb2896f19af52de3776899d91e7140e7654/aria2p-0.12.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/35/bf/9cad857b630c840738003eb24c1adb63490a1024ec40a9dcc3a753300c38/asciimatics-1.15.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f1/6a/1766f8c163951a3c9aeb30a4e6f5de9b2eed8389e3906c4cf30fcb475be6/casefy-1.1.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ec/ef/3333295ed58d900a13c92806b67e62f27876845a9a908c939f040887cca9/cryptography-45.0.5-cp311-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f8/e0/d5af850081d479e5bb6f6f310e98e1e2ea6cce9e5d67e2b7978d5690497e/diffusers-0.34.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/50/3d/9373ad9c56321fdab5b41197068e1d8c25883b3fea29dd361f9b55116869/dill-0.4.0-py3-none-any.whl
@@ -1806,6 +1809,17 @@ packages:
   version: 0.4.6
   sha256: 4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
   requires_python: '>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*'
+- conda: https://prefix.dev/conda-forge/noarch/colorama-0.4.6-pyhd8ed1ab_1.conda
+  sha256: ab29d57dc70786c1269633ba3dff20288b81664d3ff8d21af995742e2bb03287
+  md5: 962b9857ee8e7018c22f2776ffa0b2d7
+  depends:
+  - python >=3.9
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/colorama?source=hash-mapping
+  size: 27011
+  timestamp: 1733218222191
 - conda: https://prefix.dev/conda-forge/noarch/comm-0.2.3-pyhe01879c_0.conda
   sha256: 576a44729314ad9e4e5ebe055fbf48beb8116b60e58f9070278985b2b634f212
   md5: 2da13f2b299d8e1995bafbbe9689a2f7
@@ -3504,6 +3518,17 @@ packages:
   - pkg:pypi/importlib-metadata?source=hash-mapping
   size: 34641
   timestamp: 1747934053147
+- conda: https://prefix.dev/conda-forge/noarch/iniconfig-2.0.0-pyhd8ed1ab_1.conda
+  sha256: 0ec8f4d02053cd03b0f3e63168316530949484f80e16f5e2fb199a1d117a89ca
+  md5: 6837f3eff7dcea42ecd714ce1ac2b108
+  depends:
+  - python >=3.9
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/iniconfig?source=hash-mapping
+  size: 11474
+  timestamp: 1733223232820
 - conda: https://prefix.dev/conda-forge/noarch/ipykernel-6.30.0-pyh82676e8_0.conda
   sha256: c49650d0af6dab125dfb8ca1593c24172ae640fa3298530704fe4151499d24b2
   md5: 4aeff93cd0cc9b39f82cc5df70c58a43
@@ -6475,6 +6500,17 @@ packages:
   - pkg:pypi/plotly?source=hash-mapping
   size: 5187885
   timestamp: 1751025216667
+- conda: https://prefix.dev/conda-forge/noarch/pluggy-1.6.0-pyhd8ed1ab_0.conda
+  sha256: a8eb555eef5063bbb7ba06a379fa7ea714f57d9741fe0efdb9442dbbc2cccbcc
+  md5: 7da7ccd349dbf6487a7778579d2bb971
+  depends:
+  - python >=3.9
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/pluggy?source=hash-mapping
+  size: 24246
+  timestamp: 1747339794916
 - pypi: https://files.pythonhosted.org/packages/2b/31/21609a9be48e877bc33b089a7f495c853215def5aeb9564a31c210d9d769/plum_dispatch-2.5.7-py3-none-any.whl
   name: plum-dispatch
   version: 2.5.7
@@ -6774,6 +6810,26 @@ packages:
   - pkg:pypi/pysocks?source=hash-mapping
   size: 21085
   timestamp: 1733217331982
+- conda: https://prefix.dev/conda-forge/noarch/pytest-8.4.1-pyhd8ed1ab_0.conda
+  sha256: 93e267e4ec35353e81df707938a6527d5eb55c97bf54c3b87229b69523afb59d
+  md5: a49c2283f24696a7b30367b7346a0144
+  depends:
+  - colorama >=0.4
+  - exceptiongroup >=1
+  - iniconfig >=1
+  - packaging >=20
+  - pluggy >=1.5,<2
+  - pygments >=2.7.2
+  - python >=3.9
+  - tomli >=1
+  constrains:
+  - pytest-faulthandler >=2
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/pytest?source=hash-mapping
+  size: 276562
+  timestamp: 1750239526127
 - conda: https://prefix.dev/conda-forge/linux-64/python-3.12.11-h9e4cc4f_0_cpython.conda
   sha256: 6cca004806ceceea9585d4d655059e951152fc774a471593d4f5138e6a54c81d
   md5: 94206474a5608243a10c92cefbe0908f
@@ -8638,7 +8694,7 @@ packages:
 - pypi: ./
   name: vistadream
   version: 0.1.0
-  sha256: c08f8b6f6e2dc74c44cb59b9c5696ea2799e477b87f38389b160868df7997283
+  sha256: 219ac523ef79b08c0b6b6d4665f21cf7142e20ae479a9705cc27e9bb33f2196a
   requires_dist:
   - gradio
   - gradio-rerun>=0.24,<0.25
