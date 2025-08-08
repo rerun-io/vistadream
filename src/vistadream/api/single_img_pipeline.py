@@ -87,8 +87,8 @@ class SingleImageConfig:
     guidance: float = 30.0
     expansion_percent: float = 0.3
     n_frames: int = 10
-    max_resolution: Literal[512, 1024, 1920] = 1920
-    run_coarse: bool = True
+    max_resolution: Literal[512, 1024, 1920] = 512
+    stage: Literal["no-outpaint", "outpaint", "coarse", "fine"] = "no-outpaint"
 
 
 def pose_to_frame(scene: Gaussian_Scene, cam_T_world: Float[np.ndarray, "4 4"], margin: int = 32) -> Frame:
@@ -160,7 +160,7 @@ class SingleImagePipeline:
         # outpaint -> depth prediction -> scene generation
         self._initialize()
         # generate the coarse scene
-        if self.config.run_coarse:
+        if self.config.stage == "coarse":
             self._coarse()
         # save the scene
         save_dir: Path = Path("data/test_dir/")
@@ -388,23 +388,6 @@ class SingleImagePipeline:
                 camera=pinhole_param, cam_log_path=cam_log_path, image_plane_distance=self.image_plane_distance * 10
             )
 
-            # edges_mask: Bool[np.ndarray, "h w"] = depth_edges_mask(dpt, threshold=0.01)
-            # masked_depth_hw: Float[np.ndarray, "h w"] = dpt * ~edges_mask
-            # convert masked_depth to uint16 for depth image
-            # masked_depth_hw = (masked_depth_hw * 1000).astype(np.uint16)
-            # depth_1hw: Float[np.ndarray, "1 h w"] = rearrange(masked_depth_hw, "h w -> 1 h w").astype(np.float32)
-            # pts_3d: Float[np.ndarray, "h w 3"] = depth_to_points(
-            #     depth_1hw, pinhole_param.intrinsics.k_matrix.astype(np.float32)
-            # )
-            # rr.log(f"{pinhole_log_path}/masked_depth", rr.DepthImage(masked_depth_hw, meter=1000.0))
-            # rr.log(
-            #     f"{cam_log_path}/point_cloud",
-            #     rr.Points3D(
-            #         positions=pts_3d.reshape(-1, 3),
-            #         colors=rgb.reshape(-1, 3),
-            #     ),
-            # )
-
         print(f"[INFO] DONE rendering {nframes} frames.")
 
     def _initialize(self) -> None:
@@ -414,74 +397,101 @@ class SingleImagePipeline:
         # ensures image is correctly sized and processed
         input_image: Image.Image = process_image(input_image, max_dimension=self.config.max_resolution)
 
-        # Auto-generate outpainting setup: user-controlled border expansion
-        border_percent: float = (
-            self.config.expansion_percent / 2.0
-        )  # Convert to fraction per side (divide by 2 for each side)
-        border_output: tuple[Image.Image, Image.Image] = add_border_and_mask(
-            input_image,
-            zoom_all=1.0,
-            zoom_left=border_percent,
-            zoom_right=border_percent,
-            zoom_up=border_percent,
-            zoom_down=border_percent,
-            overlap=0,
-        )
-        outpaint_img: Image.Image = border_output[0]
-        outpaint_mask: Image.Image = border_output[1]
-        # Create outpainted image using Flux Inpainting
-        outpaint_img: Image.Image = self.flux_inpainter(rgb_hw3=np.array(outpaint_img), mask=np.array(outpaint_mask))
+        if self.config.stage == "no-outpaint":
+            # No outpainting, just use the input image directly
+            outpaint_img: Image.Image = input_image
+            outpaint_mask: Image.Image = Image.new("L", input_image.size, 0)
+            # Just use the input image for depth prediction since there's no outpainting
+            outpaint_rgb_hw3: UInt8[np.ndarray, "H W 3"] = np.array(outpaint_img.convert("RGB"))
+            outpaint_rel_depth: RelativeDepthPrediction = self.predictor.__call__(rgb=outpaint_rgb_hw3, K_33=None)
+            dpt_conf_mask: Float[np.ndarray, "h w"] = outpaint_rel_depth.confidence
+            # convert to boolean mask, depth confidence mask is a binary mask where values > 0 are considered confident
+            dpt_conf_mask: Bool[np.ndarray, "H W"] = dpt_conf_mask > 0
 
-        outpaint_rgb_hw3: UInt8[np.ndarray, "H W 3"] = np.array(outpaint_img.convert("RGB"))
-        outpaint_rel_depth: RelativeDepthPrediction = self.predictor.__call__(rgb=outpaint_rgb_hw3, K_33=None)
-        dpt_conf_mask: Float[np.ndarray, "h w"] = outpaint_rel_depth.confidence
-        # convert to boolean mask, depth confidence mask is a binary mask where values > 0 are considered confident
-        dpt_conf_mask: Bool[np.ndarray, "H W"] = dpt_conf_mask > 0
+            outpaint_depth_hw: Float[np.ndarray, "H W"] = outpaint_rel_depth.depth
 
-        outpaint_depth_hw: Float[np.ndarray, "H W"] = outpaint_rel_depth.depth
-        # remove any nans or infs and set them to 0
-        outpaint_depth_hw[np.isnan(outpaint_depth_hw) | np.isinf(outpaint_depth_hw)] = 0
-        # mask showing where outpainting (inpainting) is applied
-        outpaint_mask: Bool[np.ndarray, "H W"] = np.array(outpaint_mask).astype(np.bool_)
-        # depth edges, True near edges, False otherwise
-        outpaint_edges_mask: Bool[np.ndarray, "H W"] = depth_edges_mask(outpaint_depth_hw, threshold=0.01)
-        # inpaint/outpaint mask without edges (True where inpainting is applied, False near edges and where no inpainting)
-        outpaint_wo_edges: Bool[np.ndarray, "H W"] = outpaint_mask & ~outpaint_edges_mask
-        # final mask
-        outpaint_wo_edges = outpaint_wo_edges & dpt_conf_mask
+            # convert to numpy arrays
+            outpaint_mask: Bool[np.ndarray, "H W"] = np.array(outpaint_mask).astype(np.bool_)
+            outpaint_edges_mask: Bool[np.ndarray, "H W"] = depth_edges_mask(outpaint_depth_hw, threshold=0.01)
+            # inpaint/outpaint mask without edges (True where inpainting is applied, False near edges and where no inpainting)
+            outpaint_wo_edges: Bool[np.ndarray, "H W"] = outpaint_mask & ~outpaint_edges_mask
+            # final mask
+            outpaint_wo_edges = outpaint_wo_edges & dpt_conf_mask
 
-        outpaint_intri: Intrinsics = Intrinsics(
-            camera_conventions="RDF",
-            fl_x=outpaint_rel_depth.K_33[0, 0].item(),
-            fl_y=outpaint_rel_depth.K_33[1, 1].item(),
-            cx=outpaint_rel_depth.K_33[0, 2].item(),
-            cy=outpaint_rel_depth.K_33[1, 2].item(),
-            width=outpaint_rgb_hw3.shape[1],
-            height=outpaint_rgb_hw3.shape[0],
-        )
-        outpaint_extri = Extrinsics(
-            world_R_cam=np.eye(3, dtype=np.float32),
-            world_t_cam=np.zeros(3, dtype=np.float32),
-        )
-        outpaint_pinhole: PinholeParameters = PinholeParameters(
-            name="camera_outpaint",
-            intrinsics=outpaint_intri,
-            extrinsics=outpaint_extri,
-        )
+        elif self.config.stage != "no-outpaint":
+            # Auto-generate outpainting setup: user-controlled border expansion
+            border_percent: float = (
+                self.config.expansion_percent / 2.0
+            )  # Convert to fraction per side (divide by 2 for each side)
+            border_output: tuple[Image.Image, Image.Image] = add_border_and_mask(
+                input_image,
+                zoom_all=1.0,
+                zoom_left=border_percent,
+                zoom_right=border_percent,
+                zoom_up=border_percent,
+                zoom_down=border_percent,
+                overlap=0,
+            )
+            outpaint_img: Image.Image = border_output[0]
+            outpaint_mask: Image.Image = border_output[1]
+            # Create outpainted image using Flux Inpainting
+            outpaint_img: Image.Image = self.flux_inpainter(
+                rgb_hw3=np.array(outpaint_img), mask=np.array(outpaint_mask)
+            )
 
-        outpaint_frame: Frame = Frame(
-            H=outpaint_rgb_hw3.shape[0],
-            W=outpaint_rgb_hw3.shape[1],
-            rgb=outpaint_rgb_hw3.astype(np.float32) / 255.0,  # Convert to [0,1] range
-            dpt=outpaint_depth_hw,
-            intrinsic=outpaint_intri.k_matrix,
-            cam_T_world=outpaint_extri.world_T_cam,  # Identity matrix for world coordinates
-            inpaint=outpaint_mask,
-            inpaint_wo_edge=outpaint_wo_edges,
-            dpt_conf_mask=dpt_conf_mask,
-        )
+            outpaint_rgb_hw3: UInt8[np.ndarray, "H W 3"] = np.array(outpaint_img.convert("RGB"))
+            outpaint_rel_depth: RelativeDepthPrediction = self.predictor.__call__(rgb=outpaint_rgb_hw3, K_33=None)
+            dpt_conf_mask: Float[np.ndarray, "h w"] = outpaint_rel_depth.confidence
+            # convert to boolean mask, depth confidence mask is a binary mask where values > 0 are considered confident
+            dpt_conf_mask: Bool[np.ndarray, "H W"] = dpt_conf_mask > 0
 
-        log_frame(parent_log_path=self.parent_log_path, frame=outpaint_frame, cam_params=outpaint_pinhole, log_pcd=True)
+            outpaint_depth_hw: Float[np.ndarray, "H W"] = outpaint_rel_depth.depth
+            # remove any nans or infs and set them to 0
+            outpaint_depth_hw[np.isnan(outpaint_depth_hw) | np.isinf(outpaint_depth_hw)] = 0
+            # mask showing where outpainting (inpainting) is applied
+            outpaint_mask: Bool[np.ndarray, "H W"] = np.array(outpaint_mask).astype(np.bool_)
+            # depth edges, True near edges, False otherwise
+            outpaint_edges_mask: Bool[np.ndarray, "H W"] = depth_edges_mask(outpaint_depth_hw, threshold=0.01)
+            # inpaint/outpaint mask without edges (True where inpainting is applied, False near edges and where no inpainting)
+            outpaint_wo_edges: Bool[np.ndarray, "H W"] = outpaint_mask & ~outpaint_edges_mask
+            # final mask
+            outpaint_wo_edges = outpaint_wo_edges & dpt_conf_mask
+
+            outpaint_intri: Intrinsics = Intrinsics(
+                camera_conventions="RDF",
+                fl_x=outpaint_rel_depth.K_33[0, 0].item(),
+                fl_y=outpaint_rel_depth.K_33[1, 1].item(),
+                cx=outpaint_rel_depth.K_33[0, 2].item(),
+                cy=outpaint_rel_depth.K_33[1, 2].item(),
+                width=outpaint_rgb_hw3.shape[1],
+                height=outpaint_rgb_hw3.shape[0],
+            )
+            outpaint_extri = Extrinsics(
+                world_R_cam=np.eye(3, dtype=np.float32),
+                world_t_cam=np.zeros(3, dtype=np.float32),
+            )
+            outpaint_pinhole: PinholeParameters = PinholeParameters(
+                name="camera_outpaint",
+                intrinsics=outpaint_intri,
+                extrinsics=outpaint_extri,
+            )
+
+            outpaint_frame: Frame = Frame(
+                H=outpaint_rgb_hw3.shape[0],
+                W=outpaint_rgb_hw3.shape[1],
+                rgb=outpaint_rgb_hw3.astype(np.float32) / 255.0,  # Convert to [0,1] range
+                dpt=outpaint_depth_hw,
+                intrinsic=outpaint_intri.k_matrix,
+                cam_T_world=outpaint_extri.world_T_cam,  # Identity matrix for world coordinates
+                inpaint=outpaint_mask,
+                inpaint_wo_edge=outpaint_wo_edges,
+                dpt_conf_mask=dpt_conf_mask,
+            )
+
+            log_frame(
+                parent_log_path=self.parent_log_path, frame=outpaint_frame, cam_params=outpaint_pinhole, log_pcd=True
+            )
+            self.scene._add_trainable_frame(outpaint_frame, require_grad=True)
 
         input_rgb_hw3: UInt8[np.ndarray, "H W 3"] = np.array(input_image.convert("RGB"))
         # get input depth from outpaint depth, where outpaint mask is False.
@@ -561,9 +571,8 @@ class SingleImagePipeline:
         )
 
         log_frame(parent_log_path=self.parent_log_path, frame=input_frame, cam_params=input_pinhole)
-
         self.scene._add_trainable_frame(input_frame, require_grad=True)
-        self.scene._add_trainable_frame(outpaint_frame, require_grad=True)
+
         self.scene: Gaussian_Scene = GS_Train_Tool(self.scene, iters=100)(self.scene.frames, log=False)
 
     def setup_rerun(self):

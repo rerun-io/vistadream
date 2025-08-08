@@ -8694,7 +8694,7 @@ packages:
 - pypi: ./
   name: vistadream
   version: 0.1.0
-  sha256: 219ac523ef79b08c0b6b6d4665f21cf7142e20ae479a9705cc27e9bb33f2196a
+  sha256: 47a975acfd8b3b99ac0d4413e18d02d916519d4acecc8eef845ed916ab3d3df1
   requires_dist:
   - gradio
   - gradio-rerun>=0.24,<0.25

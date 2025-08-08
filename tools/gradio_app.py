@@ -6,8 +6,8 @@ import time
 import gradio as gr
 import numpy as np
 import torch
-from einops import rearrange, repeat
-from jaxtyping import UInt8, Float
+from einops import rearrange
+from jaxtyping import Float, UInt8
 from PIL import Image
 
 from vistadream.flux.sampling import denoise, get_noise, get_schedule, prepare_fill_empty_prompt, unpack
